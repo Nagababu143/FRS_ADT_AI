@@ -8,6 +8,7 @@ import AppButton from '../../components/app-button/AppButton';
 import { useRoute } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
 import ImageResizer from 'react-native-image-resizer';
+import axios from 'axios';
 
 const Registration = () => {
   const route = useRoute();
@@ -21,69 +22,76 @@ const Registration = () => {
   const [loading, setLoading] = useState(false); // ✅ Middle Loader state
 
   // Handle form submission
+
   const registrationHandler = async () => {
-    if (!fullName || !aadharNumber || !phoneNumber || !termsChecked) {
-      Alert.alert('Error', 'All fields are required, including agreeing to terms & conditions.');
+    if (!fullName || !aadharNumber || !phoneNumber) {
+      Alert.alert("Error", "All fields are required.", [
+        { text: "OK", onPress: () => navigation.navigate("Landing") }
+      ]);
       return;
     }
   
-    setLoading(true); // ✅ Show Loader
+    setLoading(true);
   
     try {
-      let resizedUri = null;
+      // ✅ Prepare API Payload
+      const payload = {
+        image: `data:image/jpeg;base64,${imageBuffer}`,
+        fullName,
+        aadharNumber,
+        phoneNumber,
+        type: "registration",
+      };
   
-      if (imageBuffer) {
-        // Resize the image to reduce size
-        const resizedImage = await ImageResizer.createResizedImage(imageBuffer, 800, 800, 'JPEG', 80);
-        resizedUri = resizedImage.uri;
-      }
+      console.log("Sending API Request with Payload:", payload);
   
-      // Prepare FormData
-      const formData = new FormData();
-      formData.append('fullName', fullName);
-      formData.append('aadharNumber', aadharNumber);
-      formData.append('phoneNumber', phoneNumber);
-      formData.append('type', 'registration');
+      // **API Call**
+      const response = await axios.post(
+        "https://yt0321nob3.execute-api.us-east-1.amazonaws.com/dev/TTD_FRS",
+        payload,
+        { headers: { "Content-Type": "application/json" } }
+      );
   
-      if (resizedUri) {
-        formData.append('image', {
-          uri: resizedUri,
-          name: 'photo.jpg',
-          type: 'image/jpeg',
-        });
-      }
+      console.log("API Response:", response.data);
   
-      // API Call
-      const response = await fetch('https://yt0321nob3.execute-api.us-east-1.amazonaws.com/dev/TTD_FRS', {
-        method: 'POST',
-        headers: { 'Content-Type': 'multipart/form-data' },
-        body: formData,
-      });
+      // ✅ Parse response body
+      const responseBody = typeof response.data.body === "string" ? JSON.parse(response.data.body) : response.data.body;
   
-      const result = await response.json();
-      console.log("API Response:", result);
-      const responseBody = typeof result.body === "string" ? JSON.parse(result.body) : result.body;
-  
-      if (result.statusCode === 200) {
+      if (response.status === 200 && responseBody.statusCode === 200) {
         Alert.alert(
           "Success",
           responseBody.message || "Registration completed successfully!",
           [{ text: "OK", onPress: () => navigation.navigate("ProfileDetails", { data: responseBody }) }]
         );
       } else {
-        Alert.alert(
-          "Error",
-          responseBody.message || "Something went wrong.",
-          [{ text: "OK", onPress: () => navigation.navigate("Landing") }]
-        );
+        throw new Error(responseBody.message || "Something went wrong.");
       }
+  
     } catch (error) {
       console.error("Error:", error);
-      Alert.alert("Error", "An unexpected error occurred.");
+  
+      let errorMessage = "An unexpected error occurred.";
+  
+      if (error.response) {
+        console.log("Server Error Response:", error.response.data);
+        errorMessage = error.response.data?.message || "Server error. Please try again later.";
+      } else if (error.request) {
+        errorMessage = "Network error. Please check your internet connection.";
+      } else {
+        errorMessage = error.message || "An unexpected error occurred.";
+      }
+  
+      // ✅ Show Alert and Navigate to Landing Page
+      Alert.alert("Error", errorMessage, [
+        { text: "OK", onPress: () => navigation.navigate("Landing") }
+      ]);
+  
     } finally {
-      setLoading(false); // ✅ Hide Loader
+      setLoading(false);
     }
   };
+  
+  
 
   return (
     <View style={{ flex: 1 }}>

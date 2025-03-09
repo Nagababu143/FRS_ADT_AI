@@ -5,6 +5,7 @@ import RNFS from 'react-native-fs';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import ImageResizer from 'react-native-image-resizer';
+import axios from 'axios';
 
 const Facecapture = () => {
   const camera = useRef<Camera>(null);
@@ -44,55 +45,86 @@ const Facecapture = () => {
   
     try {
       const photo = await camera.current.takePhoto({}); // Capture photo
-      console.log("photo",photo)
-      
       const imagePath = photo.path.trim(); // Get file path
-      console.log("imagePath",imagePath)
   
-      // Resize the image
-      const resizedImage = await ImageResizer.createResizedImage(imagePath, 800, 800, 'JPEG', 80);
-    console.log(resizedImage.uri)
+      console.log("Captured image path:", imagePath);
   
-      // Prepare FormData
-      const formData = new FormData();
-      formData.append('image', {
-        uri: resizedImage.uri.replace('file://', ''),
-        name: 'photo.jpg',
-        type: 'image/jpeg',
-      });
-      formData.append('type', type); // 'validate' or 'registration'
+      // ✅ Read file as a buffer (Base64)
+      const base64Image = await RNFS.readFile(imagePath, 'base64');
+      console.log("Base64 Image Length:", base64Image.length);
   
-      // API Call
-      const response = await fetch('https://yt0321nob3.execute-api.us-east-1.amazonaws.com/dev/TTD_FRS', {
-        method: 'POST',
-        headers: { 'Content-Type': 'multipart/form-data' },
-        body: formData,
-      });
-      console.log("response",response)
-      const result = await response.json();
-      console.log("API Response:", result);
+      // ✅ Ensure correct format (JPEG/PNG)
+      const base64WithPrefix = `data:image/jpeg;base64,${base64Image}`;
   
-      // Handle Response
-      if (result.statusCode === 200) {
-        Alert.alert(
-          "Success",
-          result.body?.message || "Registration completed successfully!",
-          [{ text: "OK", onPress: () => navigation.navigate("ProfileDetails", { data: result.body }) }]
-        );
+      // **If type is 'registration', navigate to registration screen**
+      if (type === 'registration') {
+        console.log("Navigating to Registration with Image Buffer...");
+        navigation.navigate('Registration', { imageBuffer: base64WithPrefix });
+        setLoading(false);
+        return;
+      }
+  
+      // **If type is 'validation', proceed with API call**
+      console.log("Sending API request for validation...");
+  
+      const payload = {
+        image: base64WithPrefix, // Send as Base64 with prefix
+        type: type, // Include type
+      };
+  
+      const response = await axios.post(
+        "https://yt0321nob3.execute-api.us-east-1.amazonaws.com/dev/TTD_FRS",
+        payload,
+        {
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+        }
+      );
+  
+      console.log("Full API Response:", response.data);
+  
+      // ✅ Success Handling
+      if (response.status === 200) {
+        Alert.alert("Success", response.data.body?.message || "Validation successful!");
       } else {
-        Alert.alert(
-          "Error",
-          result.body?.message || "Something went wrong.",
-          [{ text: "OK", onPress: () => navigation.navigate("Landing") }]
-        );
+        Alert.alert("Error", response.data.body?.message || "Validation failed.");
       }
     } catch (error) {
-      console.error('Error processing image:', error);
-      Alert.alert("Error", "Something went wrong. Please try again.");
+      console.error("Error processing image:", error);
+  
+      // ✅ Handle API Response Errors
+      let errorMessage = "Something went wrong. Please try again.";
+  
+      if (error.response) {
+        console.log("Error Response Data:", error.response.data);
+        console.log("Error Status Code:", error.response.status);
+  
+        if (error.response.data?.error) {
+          errorMessage = error.response.data.error;
+        } else if (error.response.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.response.status === 400) {
+          errorMessage = "Invalid image format. Please try again.";
+        } else if (error.response.status === 500) {
+          errorMessage = "Server error. Please try again later.";
+        }
+      }
+  
+      Alert.alert("Error", errorMessage, [{ text: "OK", onPress: () => navigation.navigate("Landing") }]);
+
     } finally {
       setLoading(false); // Stop loading
     }
   };
+  
+  
+  
+  
+  
+  
+  
 
   if (!hasPermission) return <Text>No access to camera</Text>;
   if (!device) return <Text>Loading camera...</Text>;
