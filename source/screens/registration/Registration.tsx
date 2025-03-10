@@ -36,7 +36,7 @@ const Registration = () => {
     try {
       // ✅ Prepare API Payload
       const payload = {
-        image: `data:image/jpeg;base64,${imageBuffer}`,
+       image:imageBuffer,
         fullName,
         aadharNumber,
         phoneNumber,
@@ -55,9 +55,9 @@ const Registration = () => {
       console.log("API Response:", response.data);
   
       // ✅ Parse response body
-      const responseBody = typeof response.data.body === "string" ? JSON.parse(response.data.body) : response.data.body;
+      const responseBody = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
   
-      if (response.status === 200 && responseBody.statusCode === 200) {
+      if (responseBody.statusCode === 200) {
         Alert.alert(
           "Success",
           responseBody.message || "Registration completed successfully!",

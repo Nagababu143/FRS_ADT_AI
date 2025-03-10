@@ -48,9 +48,21 @@ const Facecapture = () => {
       const imagePath = photo.path.trim(); // Get file path
   
       console.log("Captured image path:", imagePath);
+      const resizedImage = await ImageResizer.createResizedImage(
+        imagePath,
+        800, // New width (reduce this if needed)
+        800, // New height (reduce this if needed)
+        "JPEG", // Format
+        70, // Quality (0-100, lower = smaller size)
+        0, // Rotation
+        undefined, // No custom output path
+        false, // No keep metadata
+      );
+  
+      console.log("Resized Image Path:", resizedImage.uri);
   
       // ✅ Read file as a buffer (Base64)
-      const base64Image = await RNFS.readFile(imagePath, 'base64');
+      const base64Image = await RNFS.readFile(resizedImage.uri, 'base64');
       console.log("Base64 Image Length:", base64Image.length);
   
       // ✅ Ensure correct format (JPEG/PNG)
@@ -68,7 +80,7 @@ const Facecapture = () => {
       console.log("Sending API request for validation...");
   
       const payload = {
-        image: base64WithPrefix, // Send as Base64 with prefix
+       image: base64WithPrefix, // Send as Base64 with prefix
         type: type, // Include type
       };
   
@@ -88,6 +100,8 @@ const Facecapture = () => {
       // ✅ Success Handling
       if (response.status === 200) {
         Alert.alert("Success", response.data.body?.message || "Validation successful!");
+        const responseBody = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+        navigation.navigate("ProfileDetails", { data:  responseBody});
       } else {
         Alert.alert("Error", response.data.body?.message || "Validation failed.");
       }
